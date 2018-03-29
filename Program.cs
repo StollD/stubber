@@ -13,7 +13,7 @@ namespace AssemblyPlaceholder
     {
         static void Help (OptionSet options)
         {
-            Console.Error.WriteLine ("usage: Stubber.exe [-h] [-v] input... output_dir");
+            Console.Error.WriteLine ("usage: stubber [-h] [-v] input... output_dir");
             Console.Error.WriteLine ("");
             Console.Error.WriteLine ("Tool to clone the public interface of a CIL assembly into a new assembly");
             Console.Error.WriteLine ("");
@@ -45,7 +45,7 @@ namespace AssemblyPlaceholder
             if (showVersion) {
                 var info = FileVersionInfo.GetVersionInfo (System.Reflection.Assembly.GetEntryAssembly ().Location);
                 var version = String.Format ("{0}.{1}.{2}", info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
-                Console.Error.WriteLine ("AssemblyPlaceholder.exe version " + version);
+                Console.Error.WriteLine ("Stubber version " + version);
                 return 0;
             }
 
@@ -71,9 +71,10 @@ namespace AssemblyPlaceholder
 
         static void Strip (AssemblyDefinition assembly)
         {
-            assembly.MainModule.Types.RemoveAll (t => t.IsNotPublic);
+            StripAttributes(assembly);
             foreach (var type in assembly.MainModule.Types)
                 Strip (type);
+            assembly.MainModule.Types.RemoveAll (t => t.IsNotPublic);
         }
 
         static void Strip (TypeDefinition type)
@@ -81,15 +82,15 @@ namespace AssemblyPlaceholder
             StripAttributes (type);
 
             // Fields
-            type.Fields.RemoveAll (field => !field.IsPublic);
+            type.Fields.RemoveAll (field => !(field.IsPublic || field.IsFamily));
             foreach (var field in type.Fields)
                 StripAttributes (field);
 
             // Properties
             foreach (var property in type.Properties) {
-                if (property.GetMethod != null && !property.GetMethod.IsPublic)
+                if (property.GetMethod != null && !(property.GetMethod.IsPublic || property.GetMethod.IsFamily) )
                     property.GetMethod = null;
-                if (property.SetMethod != null && !property.SetMethod.IsPublic)
+                if (property.SetMethod != null && !(property.SetMethod.IsPublic || property.SetMethod.IsFamily))
                     property.SetMethod = null;
             }
             type.Properties.RemoveAll (property => (property.GetMethod == null && property.SetMethod == null));
@@ -98,9 +99,9 @@ namespace AssemblyPlaceholder
 
             // Events
             foreach (var evnt in type.Events) {
-                if (evnt.AddMethod != null && !evnt.AddMethod.IsPublic)
+                if (evnt.AddMethod != null && !(evnt.AddMethod.IsPublic || evnt.AddMethod.IsFamily))
                     evnt.AddMethod = null;
-                if (evnt.RemoveMethod != null && !evnt.RemoveMethod.IsPublic)
+                if (evnt.RemoveMethod != null && !(evnt.RemoveMethod.IsPublic || evnt.RemoveMethod.IsFamily))
                     evnt.RemoveMethod = null;
             }
             type.Events.RemoveAll (evnt => (evnt.AddMethod == null && evnt.RemoveMethod == null));
@@ -108,7 +109,7 @@ namespace AssemblyPlaceholder
                 StripAttributes (evnt);
 
             // Methods
-            type.Methods.RemoveAll (method => !method.IsPublic);
+            type.Methods.RemoveAll (method => !(method.IsPublic || method.IsFamily));
             foreach (var method in type.Methods) {
                 Strip (method);
                 StripAttributes (method);
@@ -131,14 +132,19 @@ namespace AssemblyPlaceholder
 
         static void StripAttributes (ICustomAttributeProvider obj)
         {
-            obj.CustomAttributes.RemoveAll (attribute => attribute.Constructor == null || !attribute.Constructor.Resolve ().IsPublic);
+            obj.CustomAttributes.RemoveAll(attribute =>
+                attribute.Constructor == null || !(attribute.Constructor.Resolve().IsPublic || attribute.Constructor.Resolve().IsFamily) ||
+                attribute.AttributeType.Resolve().IsNotPublic);
         }
 
         static Collection<T> RemoveAll<T> (this Collection<T> collection, Func<T,Boolean> predicate)
         {
             for (int i = collection.Count - 1; i >= 0; i--)
-                if (predicate (collection [i]))
-                    collection.RemoveAt (i);
+                if (predicate(collection[i]))
+                {
+                    collection.RemoveAt(i);
+                }
+
             return collection;
         }
     }
