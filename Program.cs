@@ -22,12 +22,12 @@ namespace AssemblyPlaceholder
             Console.Error.WriteLine ("  output_dir               Directory to write cloned assembly(s) to");
         }
 
-        public static int Main (string[] args)
+        public static Int32 Main (String[] args)
         {
-            bool showHelp = false;
-            bool showVersion = false;
+            Boolean showHelp = false;
+            Boolean showVersion = false;
 
-            var options = new OptionSet { {
+            OptionSet options = new OptionSet { {
                     "h|help", "show this help message and exit",
                     v => showHelp = v != null
                 }, {
@@ -35,7 +35,7 @@ namespace AssemblyPlaceholder
                     v => showVersion = v != null
                 }
             };
-            List<string> positionalArgs = options.Parse (args);
+            List<String> positionalArgs = options.Parse (args);
 
             if (showHelp) {
                 Help (options);
@@ -43,8 +43,8 @@ namespace AssemblyPlaceholder
             }
 
             if (showVersion) {
-                var info = FileVersionInfo.GetVersionInfo (System.Reflection.Assembly.GetEntryAssembly ().Location);
-                var version = String.Format ("{0}.{1}.{2}", info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
+                FileVersionInfo info = FileVersionInfo.GetVersionInfo (System.Reflection.Assembly.GetEntryAssembly ().Location);
+                String version = $"{info.FileMajorPart}.{info.FileMinorPart}.{info.FileBuildPart}";
                 Console.Error.WriteLine ("Stubber version " + version);
                 return 0;
             }
@@ -54,27 +54,28 @@ namespace AssemblyPlaceholder
                 return 1;
             }
 
-            string outputDir = positionalArgs [positionalArgs.Count - 1];
-            for (int i = 0; i < positionalArgs.Count - 1; i++) {
-                string inputPath = positionalArgs [i];
-                var assembly = AssemblyDefinition.ReadAssembly (inputPath);
-                notImplementedException = assembly.MainModule.Import (typeof(NotImplementedException).GetConstructor (Type.EmptyTypes));
+            String outputDir = positionalArgs [positionalArgs.Count - 1];
+            for (Int32 i = 0; i < positionalArgs.Count - 1; i++) {
+                String inputPath = positionalArgs [i];
+                AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly (inputPath);
+                _notImplementedException = assembly.MainModule.Import (typeof(NotImplementedException).GetConstructor (Type.EmptyTypes));
                 Strip (assembly);
-                var outputPath = outputDir + new FileInfo (inputPath).Name;
+                String outputPath = outputDir + new FileInfo (inputPath).Name;
                 Console.WriteLine ("Writing " + outputPath);
                 assembly.Write (outputPath, new WriterParameters { WriteSymbols = false });
             }
             return 0;
         }
 
-        static MethodReference notImplementedException;
+        static MethodReference _notImplementedException;
 
         static void Strip (AssemblyDefinition assembly)
         {
             StripAttributes(assembly);
-            foreach (var type in assembly.MainModule.Types)
+            foreach (TypeDefinition type in assembly.MainModule.Types)
                 Strip (type);
             assembly.MainModule.Types.RemoveAll (t => t.IsNotPublic);
+            assembly.MainModule.AssemblyReferences.RemoveAll(a => a.Name == "mscorlib" && a.Version.Major == 4);
         }
 
         static void Strip (TypeDefinition type)
@@ -83,41 +84,41 @@ namespace AssemblyPlaceholder
 
             // Fields
             type.Fields.RemoveAll (field => !(field.IsPublic || field.IsFamily));
-            foreach (var field in type.Fields)
+            foreach (FieldDefinition field in type.Fields)
                 StripAttributes (field);
 
             // Properties
-            foreach (var property in type.Properties) {
+            foreach (PropertyDefinition property in type.Properties) {
                 if (property.GetMethod != null && !(property.GetMethod.IsPublic || property.GetMethod.IsFamily) )
                     property.GetMethod = null;
                 if (property.SetMethod != null && !(property.SetMethod.IsPublic || property.SetMethod.IsFamily))
                     property.SetMethod = null;
             }
             type.Properties.RemoveAll (property => (property.GetMethod == null && property.SetMethod == null));
-            foreach (var property in type.Properties)
+            foreach (PropertyDefinition property in type.Properties)
                 StripAttributes (property);
 
             // Events
-            foreach (var evnt in type.Events) {
+            foreach (EventDefinition evnt in type.Events) {
                 if (evnt.AddMethod != null && !(evnt.AddMethod.IsPublic || evnt.AddMethod.IsFamily))
                     evnt.AddMethod = null;
                 if (evnt.RemoveMethod != null && !(evnt.RemoveMethod.IsPublic || evnt.RemoveMethod.IsFamily))
                     evnt.RemoveMethod = null;
             }
-            type.Events.RemoveAll (evnt => (evnt.AddMethod == null && evnt.RemoveMethod == null));
-            foreach (var evnt in type.Events)
-                StripAttributes (evnt);
+            type.Events.RemoveAll (e => (e.AddMethod == null && e.RemoveMethod == null));
+            foreach (EventDefinition e in type.Events)
+                StripAttributes (e);
 
             // Methods
             type.Methods.RemoveAll (method => !(method.IsPublic || method.IsFamily));
-            foreach (var method in type.Methods) {
+            foreach (MethodDefinition method in type.Methods) {
                 Strip (method);
                 StripAttributes (method);
             }
 
             // Nested types
             type.NestedTypes.RemoveAll (nestedType => !nestedType.IsNestedPublic);
-            foreach (var nestedType in type.NestedTypes)
+            foreach (TypeDefinition nestedType in type.NestedTypes)
                 Strip (nestedType);
         }
 
@@ -125,8 +126,8 @@ namespace AssemblyPlaceholder
         {
             method.IsInternalCall = false;
             method.Body = new MethodBody (method);
-            var ilProcessor = method.Body.GetILProcessor ();
-            ilProcessor.Emit (OpCodes.Newobj, notImplementedException);
+            ILProcessor ilProcessor = method.Body.GetILProcessor ();
+            ilProcessor.Emit (OpCodes.Newobj, _notImplementedException);
             ilProcessor.Emit (OpCodes.Throw);
         }
 
@@ -139,7 +140,7 @@ namespace AssemblyPlaceholder
 
         static Collection<T> RemoveAll<T> (this Collection<T> collection, Func<T,Boolean> predicate)
         {
-            for (int i = collection.Count - 1; i >= 0; i--)
+            for (Int32 i = collection.Count - 1; i >= 0; i--)
                 if (predicate(collection[i]))
                 {
                     collection.RemoveAt(i);
