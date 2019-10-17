@@ -75,7 +75,6 @@ namespace AssemblyPlaceholder
             foreach (TypeDefinition type in assembly.MainModule.Types)
                 Strip (type);
             assembly.MainModule.Types.RemoveAll (t => t.IsNotPublic);
-            assembly.MainModule.AssemblyReferences.RemoveAll(a => a.Name == "mscorlib" && a.Version.Major == 4);
         }
 
         static void Strip (TypeDefinition type)
